@@ -1,1 +1,48 @@
+#Read in gene list file, the file should contain the gene ENSEMBL names as well as the log2foldchange and adjusted p value from the DESEQ2 analysis#
+setwd("Z:/Karina/Data/Merge of excel files")
+Inpp5e <- read.table("resultsSig05_Inpp5e.csv", sep = ',', header = TRUE)[,c(1,3,7)]
+Gli3E12 <- read.table("resultsSig05_Gli3E12.csv", sep = ',', header = TRUE)[,c(1,3,7)]
+head(Inpp5e)
+head(Gli3E12)
 
+##Find overlapping genes by using merge() and subset()##
+
+#First rename columns#
+colnames(Inpp5e) <- c("Gene","log2FC_Inpp5e","pvalue_Inpp5e")
+colnames(Gli3E12) <- c("Gene","log2FC_Gli3E12","pvalue_Gli3E12")
+head(Inpp5e)
+head(Gli3E12)
+
+#Merge tables together#
+Inpp5eGli3E12 <- merge(Inpp5e, Gli3E12, by.x="Gene", by.y="Gene", all=TRUE)
+head(Inpp5eGli3E12)
+
+#Filter for dys-regulated genes in both datasets
+Inpp5eGli3E12_dys <- subset(Inpp5eGli3E12, pvalue_Inpp5e<0.05 & pvalue_Gli3E12<0.05)
+head(Inpp5eGli3E12_dys)
+length(unique(Inpp5eGli3E12_dys$Gene))
+write.csv(as.data.frame(Inpp5eGli3E12_dys), file = "Inpp5eGli3E12_dys.csv")
+
+#Filter for up-regulated genes in both datasets
+Inpp5eGli3E12_up <- subset(Inpp5eGli3E12, log2FC_Inpp5e>0 & pvalue_Inpp5e<0.05 & log2FC_Gli3E12>0 & pvalue_Gli3E12<0.05)
+head(Inpp5eGli3E12_up)
+length(unique(Inpp5eGli3E12_up$Gene))
+write.csv(as.data.frame(Inpp5eGli3E12_up), file = "Inpp5eGli3E12_up.csv")
+
+#Filter for down-regulated genes in both datasets
+Inpp5eGli3E12_down <- subset(Inpp5eGli3E12, log2FC_Inpp5e<0 & pvalue_Inpp5e<0.05 & log2FC_Gli3E12<0 & pvalue_Gli3E12<0.05)
+head(Inpp5eGli3E12_down)
+length(unique(Inpp5eGli3E12_down$Gene))
+write.csv(as.data.frame(Inpp5eGli3E12_down), file = "Inpp5eGli3E12_down.csv")
+
+#Filter for up-regulated genes in Inpp5e dataset and down-regulated genes in Gli3 dataset
+Inpp5eGli3E12_up_down <- subset(Inpp5eGli3E12, log2FC_Inpp5e>0 & pvalue_Inpp5e<0.05 & log2FC_Gli3E12<0 & pvalue_Gli3E12<0.05)
+head(Inpp5eGli3E12_up_down)
+length(unique(Inpp5eGli3E12_up_down$Gene))
+write.csv(as.data.frame(Inpp5eGli3E12_up_down), file = "Inpp5eGli3E12_up_down.csv")
+
+#Filter for down-regulated genes in Inpp5e dataset and up-regulated genes in Gli3 dataset
+Inpp5eGli3E12_down_up <- subset(Inpp5eGli3E12, log2FC_Inpp5e<0 & pvalue_Inpp5e<0.05 & log2FC_Gli3E12>0 & pvalue_Gli3E12<0.05)
+head(Inpp5eGli3E12_down_up)
+length(unique(Inpp5eGli3E12_down_up$Gene))
+write.csv(as.data.frame(Inpp5eGli3E12_down_up), file = "Inpp5eGli3E12_down_up.csv")
