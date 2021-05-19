@@ -1,1 +1,120 @@
+#
 
+setwd("Z:/Karina/Data/Deseq2 original data")
+
+#Read in the featureCounts matrix into R,; the featureCounts file needs to be in cvs format#
+cts <- read.table("countdata_Inpp5e.cvs", sep = '\t', header = T)
+head(cts)
+
+#Remove the columnn name from the first column (GeneID)#
+rownames(cts) <- cts[,1]
+cts <- cts[,-1]
+
+#Rearrange columns, only in case mutant samples are listed before control samples in the featureCounts matrix#
+#Only for Ipp5e data#
+cts <- cts[, c(5:8, 1:4)]
+head(cts)
+
+#simplify column names#
+names(cts) <- c("wt197", "wt206", "wt214", "wt222", "mut199", "mut205", "mut212", "mut219")
+head(cts)
+
+#Generating the Column data#
+#prepare an excel sheet in csv format with the sample names identical to the ones#
+#in the countsmatrix and the genotypes (wt and mut) as the second column#
+f <- file.choose()
+coldata <- read.csv(f, header = T)
+head(coldata)
+
+#Change the name of the first column#
+names(coldata) <- c("", "genotype")
+head(coldata)
+
+#This command changes the genotype names#
+coldata <- data.frame(rownames = colnames(cts), genotype = rep(c('wt', 'mut'), each = 4))
+head(coldata)
+
+#############################################################################################
+
+#Start the DESeq2 program#
+library(DESeq2)
+dds <- DESeqDataSetFromMatrix(countData = cts, colData = coldata, design = ~ genotype)
+dds
+
+#Pre-filter columns and remove those with less than 10 reads in total#
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
+dds
+
+#Define the reference level#
+dds$genotype <- factor(dds$genotype, levels = c('wt', 'mut'))
+
+##Principal component analysis##
+#rlog transformation#
+rld <- rlog( dds )
+head(assay(rld))
+library(ggrepel)
+library("ggplot2")
+ramp <- 1:3/3
+cols <- c(rgb(ramp,0, 0), rgb(0, ramp,0), rgb(0, 0, ramp), rgb(ramp, 0, ramp))
+print( plotPCA( rld, intgroup = "genotype" ) + geom_text_repel(aes(label = name)) )
+
+######################################################################################################
+
+##Differential expression analysis##
+dds <- DESeq(dds)
+res <- results(dds, alpha = 0.05)
+res
+write.csv(as.data.frame(res), file="results_Inpp5e.csv")
+
+#########################################################################################################
+
+##Diagnostic plots##
+library("apeglm")
+
+#MA plot - Had to changed contrast to coef with this version since this shrinkage method only works with coef#
+plotMA(lfcShrink(dds = dds, res = res, coef = c('genotype', 'mut', 'wt'), alpha = 0.05, ylim = c(-2, 2)))
+
+#Heatmap of sample distances - requires rlog transformation as performed earlier#
+sampleDists <- dist(t(assay(rld)))
+sampleDists
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(rld$genotype, sep="-")
+colnames(sampleDistMatrix) <- NULL
+library("RColorBrewer")
+colours = colorRampPalette(rev(brewer.pal(9, "Blues")))(255)
+heatmap(sampleDistMatrix, trace="none", col=colours)
+
+#Gene clustering#
+library("genefilter")
+topVarGenes <- head( order( rowVars( assay(rld) ), decreasing=TRUE ), 50 )
+heatmap( assay(rld)[ topVarGenes, ], scale="row",
+         trace="none", dendrogram="column",
+         col = colorRampPalette( rev(brewer.pal(9, "RdBu")) )(255))
+
+#####################################################################################################
+
+##Inspecting the results table##
+mcols(res, use.names = TRUE)
+
+#Adding gene names#
+res$ensembl <- sapply( strsplit( rownames(res), split = "\\+" ), "[", 1 )
+library("biomaRt")
+ensembl = useMart( "ensembl", dataset = "mmusculus_gene_ensembl" )
+genemap <- getBM( attributes = c("ensembl_gene_id", "mgi_symbol"),
+                  filters = "ensembl_gene_id",
+                  values = res$ensembl,
+                  mart = ensembl )
+idx <- match( res$ensembl, genemap$ensembl_gene_id )
+res$entrez <- genemap$entrezgene [ idx ]
+res$mgi_symbol <- genemap$mgi_symbol[ idx ]
+head(res, 4)
+
+#The number of differentially expressed genes with padj<0.05#
+sum(res$padj < 0.05, na.rm = TRUE)
+
+#Prepare a table with those genes which have padj<0.05, remove genes with NA values, and sort the table by adjusted p-value#
+resSig <- res[ which(res$padj < 0.05), ]
+head( resSig[ order( resSig$log2FoldChange ), ] )
+tail( resSig[ order( resSig$log2FoldChange ), ] )
+write.csv(as.data.frame(resSig), file="resultsSig05_Inpp5e.csv")
