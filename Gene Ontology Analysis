@@ -1,1 +1,92 @@
+##GO Analysis with Plots##
+
+#Import libraries#
+library(GO.db)
+library(GOstats)
+library(org.Mm.eg.db)
+
+#Read in gene list file, the file should contain the gene ENSEMBL names as well as the log2foldchange and adjusted p value from the DESEQ2 analysis#
+GeneList <- read.table("Inpp5eGli3E11Gli3E12_up.csv", sep = ',', header = TRUE)
+head(GeneList)
+
+#Set standards, FC=log2foldchange, FDR=padj#
+FDR_cutoff <- 0.05 
+FC_cutoff <- 0
+gene_ID = "ENSEMBL" 
+ontology = "BP"
+organism <- org.Mm.eg.db
+
+#Convert to ENTREZ#
+library(clusterProfiler)
+entrez_genes <- bitr(GeneList$Gene, fromType = "ENSEMBL", toType = "ENTREZID", OrgDb = org.Mm.eg.db)
+df <- bitr(GeneList$Gene, fromType = "ENSEMBL", toType = "ENTREZID", OrgDb = org.Mm.eg.db)
+head(df)
+head(GeneList)
+
+#Merge GeneList with df in order to have the ENTREZ ID, ENSEMBL ID, log2foldchange and padj values in the same dataset#
+df <- merge(GeneList, df, by.x="Gene", by.y="ENSEMBL")
+head(df)
+
+#Separate up and downregulated genes#
+genes_up <- df$ENTREZID
+genes_down <- df$ENTREZID
+
+#Set Background List#
+#For genome background#
+library(biomaRt)
+ensembl = useMart("ensembl", dataset="mmusculus_gene_ensembl") 
+background_GeneList = getBM(attributes = c("entrezgene_id"), mart=ensembl)[,1] 
+background_GeneList = as.character(background_GeneList)
+
+#Perform GO Analysis ego-up and ego-down are just the terms for the BP processes whereas ego_up_all and ego_down_all encompasseses BP, MF and CC terms#
+ego_up <- enrichGO(gene = genes_up, universe = background_GeneList,
+                   OrgDb = org.Mm.eg.db, ont = "BP", pAdjustMethod = "BH", pvalueCutoff = 0.05, readable = TRUE)
+
+ego_down <- enrichGO(gene = genes_down, universe = background_GeneList,
+                     OrgDb = org.Mm.eg.db, ont = "BP", pAdjustMethod = "BH", pvalueCutoff = 0.05, readable = TRUE)
+
+ego_up_all <- enrichGO(gene = genes_up, universe = background_GeneList,
+                       OrgDb = org.Mm.eg.db, ont = "all", pAdjustMethod = "BH", qvalueCutoff = 0.05, readable = TRUE)
+
+ego_down_all <- enrichGO(gene = genes_down, universe = background_GeneList,
+                         OrgDb = org.Mm.eg.db, ont = "all", pAdjustMethod = "BH", qvalueCutoff = 0.05, readable = TRUE)
+
+#View Results#
+go_res_up <- ego_up@result
+View(go_res_up)
+write.csv(ego_up@result, file = "GO results up.csv", sep="\t",row.names=T,col.names=T, quote=F)
+
+go_res_down <- ego_down@result
+View(go_res_down)
+write.csv(ego_down@result, file = "GO results down.csv", sep="\t",row.names=T,col.names=T, quote=F)
+
+go_res_up_all <- ego_up_all@result
+View(go_res_up_all)
+write.csv(ego_up_all@result, file = "GO results up all.csv", sep="\t",row.names=T,col.names=T, quote=F)
+
+go_res_down_all <- ego_down_all@result
+View(go_res_down_all)
+write.csv(ego_down_all@result, file = "GO results down all.csv", sep="\t",row.names=T,col.names=T, quote=F)
+
+
+#Top GO terms and Dotplots by Ontology#
+library(ggplot2)
+
+dotplot(ego_up_all, split = "ONTOLOGY", orderBy = "x")+facet_grid(ONTOLOGY~., scale = "free")+ggtitle("Up-regulated Inpp5e_12.5, Gli3_11.5 and Gli3_12.5 Genes")
+
+dotplot(ego_down_all, split = "ONTOLOGY", orderBy = "x")+facet_grid(ONTOLOGY~., scale="free")+ggtitle("Down-regulated Inpp5e_12.5, Gli3_11.5 and Gli3_12.5 Genes")
+
+dotplot(ego_up, orderBy = "x")+ggtitle("Upregulated Inpp5e_12.5, Gli3_11.5 and Gli3_12.5 BP Genes")
+
+dotplot(ego_down, orderBy = "x")+ggtitle("Down-regulated Inpp5e_12.5, Gli3_11.5 and Gli3_12.5 BP Genes")
+
+#GO Network Plots. The function simplify() removes redundancy from the terms and selects the 5 least redundant terms and displays the genes that belong to each term.# 
+#It might struggle with labelling all the genes if there is lots of data#
+library(ggnewscale)
+
+ego_up_simplified <- simplify(ego_up)
+cnetplot(ego_up_simplified, foldChange = GeneList$FC, colorEdge = TRUE, max.overlaps = 10)
+
+ego_down_simplified <- simplify(ego_down)
+cnetplot(ego_down_simplified, foldChange = GeneList$FC, colorEdge = TRUE, max.overlaps = 10)
 
