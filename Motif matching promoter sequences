@@ -1,1 +1,66 @@
+###Establishing gene promoter sequences and identifying motif binding sites###
+
+#To check promoter for TF binding sites, these steps are required:
+#1.Retrieve the binding motif (the position frequency matrix, or PFM) of a given transcription factor
+#2.Retrieve the promoter regions for a set of candidate targets
+#3.Identify the sequence matches of the binding motif in the the genes' promoter regions
+
+
+##1. Retrieve the binding motif (the position frequency matrix, or PFM) of a given transcription factor##
+#Should get an overview of the different motifs and organism/s#
+library(MotifDb)
+query(MotifDb, 'Gli3')
+
+#Select the specific mortif/s you want to use#
+#Mus musculus only has one Gli3 motif according to MotifDb
+Gli3.HOCOMOCOv10 <- query(MotifDb, 'gli3') [[2]]
+
+#The seqlogo package is the standard tool for viewing sequence logos, but can only portray one logo at a time#
+library(seqLogo)
+seqLogo(Gli3.HOCOMOCOv10)
+#The motifStack package can plot both motifs together if necessary#
+
+#The motif/s, must be transformed before they can be matched to DNA sequence.
+Gli3.HOCOMOCOv10 <- round(100 * Gli3.HOCOMOCOv10)
+
+
+##2. Retrieve the promoter regions for a set of candidate targets & 3.Identify the sequence matches of the binding motif in the the genes' promoter regions##
+#Open file#
+setwd("Z:/Karina/Data/Merge of excel files/Inpp5eGli3E11Gli3E12 upregulated")
+GeneList <- read.table("Inpp5eGli3E11Gli3E12_up.csv", sep = ',', header = TRUE)[,c(2)]
+head(GeneList)
+
+#Convert to entrezid and gene symbol#
+library("biomaRt")
+ensembl = useMart( "ensembl", dataset = "mmusculus_gene_ensembl" )
+listAttributes(ensembl)
+genemap <- getBM( attributes = c("ensembl_gene_id", "mgi_symbol","entrezgene_id"),
+                  filters = "ensembl_gene_id",
+                  values = GeneList,
+                  mart = ensembl )
+head(genemap)
+
+genes <- genemap$entrezgene_id
+genes<-unique(genes[!is.na(genes)])
+i=genes[1]
+
+#Loop function used to obtain promoter sequences and subsequently analysed for motif binding sites#
+library(TxDb.Mmusculus.UCSC.mm10.knownGene)
+library(BSgenome.Mmusculus.UCSC.mm10)
+library(GenomicFeatures)
+
+for(i in genes){
+  
+  print(i)
+  gene = as.character(i)
+  chromosomal.loc <- transcriptsBy(TxDb.Mmusculus.UCSC.mm10.knownGene, by="gene")[gene]
+  promoter <- getPromoterSeq(chromosomal.loc, Mmusculus, upstream=3000, downstream=1000)
+  
+  motif_match <- matchPWM(Gli3.HOCOMOCOv10, unlist(promoter)[[1]], "90%")
+  print(motif_match)
+  #pwm.hits <- sapply(promoter, function(pseq) matchPWM(x, pseq, min.score="90%"))
+  #results <- data.frame(Gene = i, Motif_match =as.character(motif_match))
+  #my_table_of_sequences <- rbind(my_table_of_sequences, results)
+  
+}
 
